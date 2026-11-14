@@ -5,4 +5,4 @@ compatibility_date = "2024-11-01"
 # Environment Variables (Set secrets via Cloudflare Dashboard or `npx wrangler secret put`)
 [vars]
 IG_USERNAME = "your_instagram_username"
-WEBHOOK_VERIFY_TOKEN = "ace_social_agent_2026"
+WEBHOOK_VERIFY_TOKEN = "your_custom_verify_token_here"

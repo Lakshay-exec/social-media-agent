@@ -2,6 +2,7 @@
 agent/storage.py
 Handles persistent storage for configuration and runtime state.
 Guarantees clean UTF-8 encoding without BOM for Linux runner compatibility.
+Strictly sanitizes state before saving to ensure zero private tokens are ever written to git.
 """
 import json
 import logging
@@ -34,8 +35,6 @@ DEFAULT_STATE = {
     "ig_replied_ids": [],
     "ig_liked_ids": [],
     "last_post_id": None,
-    "active_threads_token": None,
-    "active_ig_token": None,
 }
 
 
@@ -64,7 +63,6 @@ def load_state(path: str = "state.json") -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            # Ensure all expected state keys exist
             for key, val in DEFAULT_STATE.items():
                 if key not in data:
                     data[key] = val
@@ -76,17 +74,25 @@ def load_state(path: str = "state.json") -> dict:
 
 
 def save_state(state: dict, path: str = "state.json") -> None:
-    """Saves runtime state atomically to state.json in standard UTF-8 without BOM."""
+    """
+    Saves runtime state atomically to state.json in standard UTF-8 without BOM.
+    Strictly strips private tokens (active_threads_token, active_ig_token) so
+    confidential credentials NEVER leak into the git repository.
+    """
+    sanitized = state.copy()
+    sanitized.pop("active_threads_token", None)
+    sanitized.pop("active_ig_token", None)
+
     temp_path = f"{path}.tmp"
     try:
         with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(state, f, indent=2, ensure_ascii=False)
+            json.dump(sanitized, f, indent=2, ensure_ascii=False)
             f.write("\n")
         if os.path.exists(path):
             os.replace(temp_path, path)
         else:
             os.rename(temp_path, path)
-        logger.info("Saved updated state to '%s'.", path)
+        logger.info("Saved sanitized state to '%s' (zero private tokens exposed).", path)
     except Exception as e:
         logger.error("Failed to persist state to '%s': %s", path, e)
         if os.path.exists(temp_path):

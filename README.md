@@ -7,7 +7,24 @@
 
 A production-ready, open-source autonomous AI social media agent that crafts authentic, high-engagement content and handles community interaction across both **Meta Threads** and **Instagram**.
 
-Runs **100% serverless and free** on GitHub Actions with automated **60-day token auto-refresh**, smart spam-filtered replies, and independent platform controls.
+Runs **100% serverless and free** on GitHub Actions with automated smart spam-filtered replies, real-time Cloudflare Worker webhooks, and independent platform controls.
+
+---
+
+## 🔒 Security & Privacy Architecture
+
+This project is engineered with a **strict zero-leakage privacy model**, making it **100% safe for public repositories and forks**:
+
+1. **Zero Credentials in Git**:
+   - Personal account IDs (`THREADS_USER_ID`, `IG_USER_ID`) and secret credentials (`THREADS_ACCESS_TOKEN`, `IG_ACCESS_TOKEN`, `META_APP_ID`, `META_APP_SECRET`, `GEMINI_API_KEY`) are **never hardcoded** in any tracked repository file.
+   - All credentials reside exclusively in **encrypted GitHub Repository Secrets** (for CI/CD automation) or git-ignored `.env` files (for local development).
+
+2. **Sanitized State Persistence**:
+   - `state.json` only tracks public interaction IDs (`threads_replied_ids`, `ig_replied_ids`, `ig_liked_ids`, `last_post_id`) so the agent never replies to or likes the same comment twice.
+   - The storage engine (`agent/storage.py`) strictly strips all active access tokens before persisting `state.json` to disk. Even when `github-actions[bot]` commits updated state back to GitHub, **zero private tokens or personal identifiers are committed**.
+
+3. **Safe Cloudflare Worker Deployment**:
+   - The real-time Cloudflare Worker configuration (`cloudflare/wrangler.toml`) contains only placeholders. Sensitive tokens are passed securely as Cloudflare Worker Secrets (`wrangler secret put`).
 
 ---
 
@@ -16,7 +33,6 @@ Runs **100% serverless and free** on GitHub Actions with automated **60-day toke
 - **Multichannel Autonomous Operation**:
   - **Meta Threads**: Generates context-aware, human-like posts and engages in community replies via the official 2-step container Graph API.
   - **Real-Time Instagram AI (Cloudflare Workers)**: Catches Meta Webhooks in under 2 seconds, auto-likes comments, and uses Gemini AI to reply on ANY Reel or Post 24/7.
-- **Zero-Maintenance 60-Day Token Auto-Refresh**: Automatically exchanges expiring tokens for fresh 60-day credentials on every scheduled run and persists state via Git.
 - **Independent Modular Architecture**: Either platform can be toggled on/off independently in `config.json` or skipped gracefully if secrets are missing.
 - **Powered by Google Gemini**: Leverages next-gen Gemini models via the official `google-genai` SDK with automatic failover and zero-cost operation.
 - **Spam & Crypto Filtering**: Automatically flags and ignores promotional bots, crypto solicitors, and follow-bait while replying to real community members.
@@ -34,7 +50,7 @@ flowchart TD
 
     subgraph Initialization
         RUNNER --> LOAD_CFG["Load config.json & state.json"]
-        LOAD_CFG --> ENV["Load GitHub Secrets"]
+        LOAD_CFG --> ENV["Load Encrypted GitHub Secrets"]
     end
 
     subgraph Gemini AI Engine
@@ -57,9 +73,9 @@ flowchart TD
         BRAIN -->|Post Reply| IG_REPLY["POST /{comment_id}/replies"]
     end
 
-    subgraph Persistence
-        TH_API -->|Renew Token| STATE["state.json"]
-        IG_API -->|Renew Token| STATE
+    subgraph Persistence ["Persistence (Sanitized)"]
+        TH_COMM -->|Interaction IDs| STATE["state.json (Zero Credentials)"]
+        IG_COMM -->|Interaction IDs| STATE
         STATE --> GIT_COMMIT["github-actions[bot] Commit [skip ci]"]
     end
 ```
@@ -98,7 +114,7 @@ Edit `config.json` directly from your browser to personalize your niche, persona
     "auto_like_comments": true,
     "max_posts_to_scan": 5
   },
-  "gemini_model": "gemini-3.8-flash"
+  "gemini_model": "gemini-3-flash-preview"
 }
 ```
 
@@ -165,10 +181,31 @@ In your GitHub repository, navigate to **Settings > Secrets and variables > Acti
 | `THREADS_USER_ID` | Threads | Numeric Threads user ID |
 | `IG_ACCESS_TOKEN` | Instagram | Instagram Graph API user access token |
 | `IG_USER_ID` | Instagram | Instagram Business Account ID |
-| `META_APP_ID` | Auto-Refresh | Meta App ID (for automated 60-day token exchange) |
-| `META_APP_SECRET` | Auto-Refresh | Meta App Secret (for automated 60-day token exchange) |
+| `META_APP_ID` | Meta App | Meta App ID (for token validation) |
+| `META_APP_SECRET` | Meta App | Meta App Secret (for token validation) |
 
 > **Note**: If you only configure Threads secrets, the Instagram module skips gracefully without failing. If you only configure Instagram secrets, the Threads module skips gracefully.
+
+---
+
+## ⚡ (Optional) Real-Time Instagram AI via Cloudflare Worker
+
+To enable instant (< 2 second) auto-replies to comments via Meta Webhooks:
+
+1. Create a free account at [Cloudflare](https://dash.cloudflare.com/).
+2. Navigate to `cloudflare/` and deploy:
+   ```bash
+   cd cloudflare
+   npx wrangler deploy
+   ```
+3. Set your private secrets safely in Cloudflare (never in `wrangler.toml`):
+   ```bash
+   npx wrangler secret put IG_ACCESS_TOKEN
+   npx wrangler secret put IG_USER_ID
+   npx wrangler secret put GEMINI_API_KEY
+   npx wrangler secret put WEBHOOK_VERIFY_TOKEN
+   ```
+4. In your Meta Developer App, go to **Webhooks > Instagram**, set the Callback URL to your Worker URL (`https://<worker-name>.<subdomain>.workers.dev`), and subscribe to the `comments` field.
 
 ---
 
