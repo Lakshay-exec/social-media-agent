@@ -23,6 +23,7 @@ from agent.instagram_api import (
     get_recent_media,
     like_comment,
     reply_to_comment,
+    resolve_instagram_user_id,
 )
 from agent.storage import load_config, load_state, save_state
 from agent.threads_api import (
@@ -152,7 +153,10 @@ def run_instagram_module(config: dict, state: dict) -> None:
     except Exception as e:
         logger.warning("Instagram token refresh encountered an issue: %s", e)
 
-    # 2. Automated Engagement (Like and/or Reply to Comments)
+    # 2. Resolve Instagram User ID (in case user provided Facebook Page ID)
+    ig_user_id = resolve_instagram_user_id(ig_user_id, token)
+
+    # 3. Automated Engagement (Like and/or Reply to Comments)
     auto_like = ig_cfg.get("auto_like_comments", True)
     auto_reply = ig_cfg.get("auto_reply_comments", True)
 

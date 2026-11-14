@@ -1,8 +1,8 @@
 """
 agent/instagram_api.py
 API client for Instagram Graph API via Meta Graph API v27.0.
-Implements automated 60-day token exchange, fetching recent media,
-reading comments, liking comments with rate-limit delays, and automated replies.
+Implements automated 60-day token exchange, automatic Page-to-Instagram ID resolution,
+fetching recent media, reading comments, liking comments with rate-limit delays, and automated replies.
 """
 import logging
 import os
@@ -18,6 +18,36 @@ GRAPH_BASE_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 def get_active_ig_token(state: dict) -> str | None:
     """Retrieves active Instagram token from state or environment."""
     return state.get("active_ig_token") or os.environ.get("IG_ACCESS_TOKEN")
+
+
+def resolve_instagram_user_id(target_id: str, token: str) -> str:
+    """
+    Resolves an Instagram Business Account ID. If target_id is a Facebook Page ID,
+    automatically queries Meta to extract the linked instagram_business_account ID.
+    """
+    url = f"{GRAPH_BASE_URL}/{target_id}"
+    params = {
+        "fields": "instagram_business_account,connected_instagram_account,name",
+        "access_token": token,
+    }
+    try:
+        res = requests.get(url, params=params, timeout=25)
+        if res.status_code == 200:
+            data = res.json()
+            ig_acc = data.get("instagram_business_account") or data.get("connected_instagram_account")
+            if ig_acc and ig_acc.get("id"):
+                resolved_id = str(ig_acc["id"])
+                logger.info(
+                    "Auto-resolved Instagram Business ID '%s' from Facebook Page '%s' (%s).",
+                    resolved_id, target_id, data.get("name")
+                )
+                return resolved_id
+            else:
+                logger.info("Page data returned from Meta for %s: %s", target_id, data)
+    except Exception as e:
+        logger.warning("Could not auto-resolve Page ID %s: %s", target_id, e)
+
+    return target_id
 
 
 def auto_refresh_ig_token(state: dict, app_id: str | None = None, app_secret: str | None = None) -> bool:
@@ -86,7 +116,7 @@ def get_recent_media(ig_user_id: str, token: str, limit: int = 5) -> list[dict]:
         res = requests.get(url, params=params, timeout=25)
         res.raise_for_status()
         media = res.json().get("data", [])
-        logger.info("Retrieved %d recent Instagram media posts.", len(media))
+        logger.info("Retrieved %d recent Instagram media posts for %s.", len(media), ig_user_id)
         return media
     except requests.exceptions.RequestException as e:
         logger.error("Failed to fetch Instagram recent media for user %s: %s", ig_user_id, e)
@@ -127,7 +157,6 @@ def like_comment(ig_user_id: str, comment_id: str, token: str) -> bool:
         res = requests.post(url, headers=headers, json=payload, timeout=25)
         res.raise_for_status()
         logger.info("Liked Instagram comment %s successfully.", comment_id)
-        # Meta engagement rate-limit respect
         time.sleep(1.5)
         return True
     except requests.exceptions.RequestException as e:
