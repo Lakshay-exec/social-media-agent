@@ -15,7 +15,7 @@ Runs **100% serverless and free** on GitHub Actions with automated **60-day toke
 
 - **Multichannel Autonomous Operation**:
   - **Meta Threads**: Generates context-aware, human-like posts and engages in community replies via the official 2-step container Graph API.
-  - **Instagram**: Scans recent media, automatically likes comments with Meta rate-limit safety (`time.sleep(1.5)`), and posts witty, authentic replies.
+  - **Real-Time Instagram AI (Cloudflare Workers)**: Catches Meta Webhooks in under 2 seconds, auto-likes comments, and uses Gemini AI to reply on ANY Reel or Post 24/7.
 - **Zero-Maintenance 60-Day Token Auto-Refresh**: Automatically exchanges expiring tokens for fresh 60-day credentials on every scheduled run and persists state via Git.
 - **Independent Modular Architecture**: Either platform can be toggled on/off independently in `config.json` or skipped gracefully if secrets are missing.
 - **Powered by Google Gemini**: Leverages next-gen Gemini models via the official `google-genai` SDK with automatic failover and zero-cost operation.
